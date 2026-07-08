@@ -4,7 +4,7 @@
 
 	const headerEnd = $derived(HEADER_SIZE);
 	const cellOffsetEnd = $derived(
-		headerEnd + page.cellOffset.length + page.availablityFreeList.length * 2
+		headerEnd + page.cellOffset.length + page.availabilityFreeList.length * 2
 	);
 	const memoryDumpSections = $derived([
 		{ title: 'Header', color: 'bg-amber-500' },

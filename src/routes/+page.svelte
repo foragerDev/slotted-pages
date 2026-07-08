@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { fly } from 'svelte/transition';
 	import { store, Cell } from '$lib/index';
 	import PageHeaderView from '$lib/PageHeaderView.svelte';
 	import HexTable from '$lib/HexTable.svelte';
@@ -138,9 +137,8 @@
 	// })
 </script>
 
-
 <svelte:head>
-    <title>Slotted Pages</title>
+	<title>Slotted Pages</title>
 </svelte:head>
 <div
 	class="mx-auto min-h-dvh w-full max-w-none px-1 py-1 md:px-3 md:py-4 lg:h-dvh lg:overflow-hidden"
@@ -149,7 +147,19 @@
 		class="grid grid-cols-1 gap-3 lg:h-full lg:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.8fr)] lg:gap-4"
 	>
 		<div class="panel flex min-h-112 flex-col overflow-hidden lg:min-h-0 lg:h-full">
-			<div class="mb-2 text-center text-sm font-bold md:text-left">Hex View</div>
+			<div class="flex flex-row items-center justify-between">
+				<div class="mb-2 text-center text-sm font-bold md:text-left">Hex View</div>
+				<button
+					class="mb-2 ml-auto rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700"
+					onclick={() => {
+						store.update((page) => {
+							page.reset();
+							return page;
+						});
+					}}
+					>Reset</button
+				>
+			</div>
 			<div class="min-h-0 flex-1 rounded-lg border border-gray-300">
 				<HexTable page={$store} />
 			</div>
@@ -186,7 +196,7 @@
 					</div>
 
 					{#if foundResult !== null}
-                        {@const {key, value} = foundResult}
+						{@const { key, value } = foundResult}
 						<p
 							class="mt-2 rounded-md px-2 py-1 text-sm font-medium transition bg-emerald-50 text-emerald-700"
 						>

@@ -23,7 +23,10 @@ export class Cell {
     */
 
 export const HEADER_SIZE = 4 + 6 + 1 + 1; // 12 bytes
-const OVERHEAD_SIZE = 2; // 2 bytes for key length and value length
+const OVERHEAD_SIZE = 2; // 2 bytes for key length and value
+const MIN_ALLOWED_FREE_SPACE = 4; // Minimum allowed free space to avoid internal fragmentation
+const PAGE_SIZE = 256; // Assuming a default page size of 256 bytes
+
 export class PageHeader {
 	pageId: number;
 	magicString: 'MAGICS';
@@ -32,7 +35,7 @@ export class PageHeader {
 	constructor(pageId: number) {
 		this.pageId = pageId;
 		this.magicString = 'MAGICS';
-		this.freeSpaceEnd = 255; // Assuming a default page size of 256 bytes
+		this.freeSpaceEnd = PAGE_SIZE - 1; // Assuming a default page size of 256 bytes
 		this.cellCount = 0;
 	}
 
@@ -57,7 +60,7 @@ export class PageHeader {
     | size: 1B
     */
 
-type FreeEntery = {
+type FreeEntry = {
 	offset: number;
 	size: number;
 };
@@ -67,15 +70,15 @@ export class Page {
 	header: PageHeader;
 	cellOffset: number[];
 	cellsData: Map<number, Cell>;
-	availablityFreeList: FreeEntery[];
+	availabilityFreeList: FreeEntry[];
 	rawData: Uint8Array;
 
 	constructor() {
 		this.header = new PageHeader(0);
-		this.pageSize = 255;
+		this.pageSize = PAGE_SIZE;
 		this.cellOffset = [];
 		this.cellsData = new Map<number, Cell>();
-		this.availablityFreeList = [];
+		this.availabilityFreeList = [];
 		this.rawData = new Uint8Array(this.pageSize);
 		this.serialize();
 	}
@@ -89,17 +92,17 @@ export class Page {
 	}
 
 	private findCellSlot(spaceNeeded: number): number | null {
-		if (this.availablityFreeList.length === 0) {
+		if (this.availabilityFreeList.length === 0) {
 			return null;
 		}
 
 		let bestIndex = -1;
 		let bestSize = Infinity;
 
-		for (let i = 0; i < this.availablityFreeList.length; i++) {
-			const entery = this.availablityFreeList[i];
-			if (entery.size >= spaceNeeded && entery.size < bestSize) {
-				bestSize = entery.size;
+		for (let i = 0; i < this.availabilityFreeList.length; i++) {
+			const entry = this.availabilityFreeList[i];
+			if (entry.size >= spaceNeeded && entry.size < bestSize) {
+				bestSize = entry.size;
 				bestIndex = i;
 			}
 		}
@@ -109,29 +112,51 @@ export class Page {
 	private allocateSlot(spaceNeeded: number): number | null {
 		const freeSlotIndex = this.findCellSlot(spaceNeeded);
 		if (freeSlotIndex !== null) {
-			return this.availablityFreeList[freeSlotIndex].offset;
+			const freeSlot = this.availabilityFreeList[freeSlotIndex];
+			const allocatedSlot = freeSlot.offset;
+			if (freeSlot.size > spaceNeeded && freeSlot.size - spaceNeeded >= MIN_ALLOWED_FREE_SPACE) {
+				const remainingSize = freeSlot.size - spaceNeeded;
+				const remainingOffset = allocatedSlot + spaceNeeded;
+				this.availabilityFreeList[freeSlotIndex] = { offset: remainingOffset, size: remainingSize };
+			} else {
+				this.availabilityFreeList.splice(freeSlotIndex, 1);
+			}
+
+			return allocatedSlot;
 		}
 
-		const freeSpaceAvailable =
-			this.header.freeSpaceEnd -
-			HEADER_SIZE -
-			(this.header.cellCount + 1) -
-			this.availablityFreeList.length * 2;
+		const freeSpaceAvailable = this.calculateAvailableFreeSpace();
+		// Freespace available should always be greater than spaceNeeded, as we need 1 byte for cellOffset
 		if (freeSpaceAvailable >= spaceNeeded) {
-			this.header.freeSpaceEnd -= spaceNeeded + OVERHEAD_SIZE;
-			return this.header.freeSpaceEnd - spaceNeeded + 1;
+			const allocatedSlot = this.header.freeSpaceEnd - spaceNeeded + 1;
+			this.header.freeSpaceEnd -= spaceNeeded;
+			return allocatedSlot;
 		}
 
 		return null;
 	}
 
+	private calculateAvailableFreeSpace() {
+		// freeSpaceEnd: Where the free space ends in the page
+		// HEADER_SIZE: The size of the page header
+		// cellOffset.length: The number of cells currently in the page each 1 byte and 1 more for new cell
+		// availablityFreeList.length * 2: Each free entry in the availabilityFreeList takes 2 bytes (1 for offset and 1 for size)
+
+		return (
+			this.header.freeSpaceEnd -
+			HEADER_SIZE -
+			(this.cellOffset.length + 1) -
+			this.availabilityFreeList.length * 2
+		);
+	}
+
 	private freeSlot(offset: number, size: number) {
-		this.availablityFreeList.push({ offset, size: size + OVERHEAD_SIZE });
+		this.availabilityFreeList.push({ offset, size: size + OVERHEAD_SIZE });
 	}
 
 	compact(): void {}
 
-	private findCellIndexByKey(key: string): number | null {
+	findCellIndexByKey(key: string): number | null {
 		let low = 0;
 		let high = this.cellOffset.length - 1;
 
@@ -150,7 +175,7 @@ export class Page {
 	}
 
 	private update(key: string, value: string, cellIndex: number) {
-		// len of key + len of value 
+		// len of key + len of value
 		const requiredSize = key.length + value.length;
 
 		// Assumption is, if there is existing key it must exist in the page
@@ -165,13 +190,12 @@ export class Page {
 			this.freeSlot(cellOffset, existingCellSize);
 			this.cellOffset.splice(cellIndex, 1);
 
-
 			const newSlot = this.allocateSlot(requiredSize + OVERHEAD_SIZE);
 
 			if (newSlot === null) {
 				throw new Error('Not enough space to update the cell. Needs to implement compaction.');
 			}
-			
+
 			this.cellsData.set(newSlot, new Cell(key, value));
 			this.cellOffset.push(newSlot);
 			this.sortCellsByKey();
@@ -231,13 +255,13 @@ export class Page {
 	}
 
 	private writeAvailabilityFreeList(buffer: Uint8Array): void {
-		let cursor = HEADER_SIZE + 1; // Start after header and cell counts
+		let cursor = HEADER_SIZE; // Start after header and cell counts
 		const view = new DataView(
 			buffer.buffer,
 			buffer.byteOffset + cursor,
 			buffer.byteLength - cursor
 		);
-		for (const freeEntry of this.availablityFreeList) {
+		for (const freeEntry of this.availabilityFreeList) {
 			view.setUint8(0, freeEntry.offset); // Write offset
 			cursor += 1;
 			view.setUint8(1, freeEntry.size); // Write size
@@ -245,11 +269,9 @@ export class Page {
 		}
 	}
 
-
 	private writeCellOffsetsInplace(buffer: Uint8Array): void {
-		console.log(this.availablityFreeList.length);
 		// We just need the calculate from the begining
-		let cellOffsets = HEADER_SIZE + this.availablityFreeList.length * 2;
+		let cellOffsets = HEADER_SIZE + this.availabilityFreeList.length * 2;
 
 		const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 
@@ -260,7 +282,7 @@ export class Page {
 	}
 
 	serialize(): Uint8Array {
-		const buffer = new Uint8Array(this.pageSize + 1);
+		const buffer = new Uint8Array(PAGE_SIZE);
 
 		const header = this.header.serialize();
 
@@ -282,7 +304,6 @@ export class Page {
 			cellData.set(new TextEncoder().encode(cell.key), 1);
 			cellData[1 + keyLen] = valueLen;
 			cellData.set(new TextEncoder().encode(cell.value), 1 + keyLen + 1);
-			console.log(cellData.length, offset);
 			buffer.set(cellData, offset);
 		}
 
@@ -290,6 +311,14 @@ export class Page {
 		return buffer;
 	}
 
+	reset(): void {
+		this.header = new PageHeader(0);
+		this.cellOffset = [];
+		this.cellsData.clear();
+		this.availabilityFreeList = [];
+		this.rawData = new Uint8Array(this.pageSize);
+		this.serialize();
+	}
 }
 
 export const store = writable(new Page());
