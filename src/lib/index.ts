@@ -23,7 +23,7 @@ export class Cell {
     */
 
 export const HEADER_SIZE = 4 + 6 + 1 + 1; // 12 bytes
-
+const OVERHEAD_SIZE = 2; // 2 bytes for key length and value length
 export class PageHeader {
 	pageId: number;
 	magicString: 'MAGICS';
@@ -118,16 +118,16 @@ export class Page {
 			(this.header.cellCount + 1) -
 			this.availablityFreeList.length * 2;
 		if (freeSpaceAvailable >= spaceNeeded) {
-			console.log('Free space available:', freeSpaceAvailable, 'space needed:', spaceNeeded);
+			this.header.freeSpaceEnd -= spaceNeeded + OVERHEAD_SIZE;
 			return this.header.freeSpaceEnd - spaceNeeded + 1;
 		}
 
 		return null;
 	}
 
-    private freeSlot(offset: number, size: number) {
-        this.availablityFreeList.push()
-    }
+	private freeSlot(offset: number, size: number) {
+		this.availablityFreeList.push({ offset, size: size + OVERHEAD_SIZE });
+	}
 
 	compact(): void {}
 
@@ -149,55 +149,72 @@ export class Page {
 		return null;
 	}
 
-	insert(key: string, value: string): boolean {
-		const existingIndex = this.findCellIndexByKey(key);
+	private update(key: string, value: string, cellIndex: number) {
+		// len of key + len of value 
+		const requiredSize = key.length + value.length;
 
-		// Avoid complication, just mark old cell deleted and inserted new one.
-		// const existingCellSize = 0;
-		// if (existingIndex !== null) {
-		//      existingCellSize = this.cellsData.get(this.cellOffset[existingIndex])!.length();
-		// }
-		const newCellSize = key.length + value.length + 2;
+		// Assumption is, if there is existing key it must exist in the page
+		const cellOffset = this.cellOffset[cellIndex];
+		const existingCellSize = this.cellsData.get(cellOffset)!.length();
+
+		// reuse only of length is still same otherwise it will cause internal fragmentation.
+		if (requiredSize === existingCellSize) {
+			this.cellsData.set(cellOffset, new Cell(key, value));
+		} else {
+			// So we will remove oldKeyIndex from cellOffset and add that old availabilityFreeList
+			this.freeSlot(cellOffset, existingCellSize);
+			this.cellOffset.splice(cellIndex, 1);
+
+
+			const newSlot = this.allocateSlot(requiredSize + OVERHEAD_SIZE);
+
+			if (newSlot === null) {
+				throw new Error('Not enough space to update the cell. Needs to implement compaction.');
+			}
+			
+			this.cellsData.set(newSlot, new Cell(key, value));
+			this.cellOffset.push(newSlot);
+			this.sortCellsByKey();
+		}
+		return false;
+	}
+
+	insert(key: string, value: string): boolean {
+		const result = this.applyInsert(key, value);
+		this.serialize();
+		return result;
+	}
+
+	private applyInsert(key: string, value: string): boolean {
+		const existingIndex = this.findCellIndexByKey(key);
 		if (existingIndex !== null) {
-			// if (newCellSize <= existingCellSize) {
-			// 	this.cellsData.set(this.cellOffset[existingIndex], new Cell(key, value));
-			// 	// this.serialize();
-			// 	return true;
-			// } else if (newCellSize > existingCellSize) {
-			this.doDelete(key);
-			// }
+			return this.update(key, value, existingIndex);
 		}
 
-		let slotOffset = this.getSlot(newCellSize);
+		const newCellSize = key.length + value.length + OVERHEAD_SIZE;
+
+		const slotOffset = this.allocateSlot(newCellSize);
 
 		if (slotOffset === null) {
-			// this.compact();
-			console.log('Here');
-			slotOffset = this.getSlot(newCellSize);
-			if (slotOffset === null) {
-				throw new Error(
-					'Not enough space to insert the cell. Needs to implemented compaction. And B+Tree to allocate new pages.'
-				);
-			}
+			throw new Error(
+				'Not enough space to insert the cell. Needs to implemented compaction. And B+Tree to allocate new pages.'
+			);
 		}
 
 		this.cellsData.set(slotOffset, new Cell(key, value));
 		this.cellOffset.push(slotOffset);
 		this.header.cellCount++;
-		this.header.freeSpaceEnd -= newCellSize;
-
-		// Sort the cell offsets after insertion
 		this.sortCellsByKey();
-		this.serialize();
 		return true;
 	}
 
 	delete(key: string): boolean {
-		return this.doDelete(key);
+		const result = this.applyDelete(key);
+		this.serialize();
+		return result;
 	}
 
-	private update(key: string, value: string): boolean {}
-	private doDelete(key: string): boolean {
+	private applyDelete(key: string): boolean {
 		const index = this.findCellIndexByKey(key);
 		if (index === null) {
 			return false;
@@ -208,17 +225,12 @@ export class Page {
 
 		// this.cellsData.delete(cellOffset);
 		this.cellOffset.splice(index, 1);
-		this.availablityFreeList.push({ offset: cellOffset, size: cellSize });
+		this.freeSlot(cellOffset, cellSize);
 		this.header.cellCount--;
-		this.writeHeaderInplace();
-
-		this.writeAvailabilityFreeList(this.rawData);
-		this.writeCellOffsetsInplace(this.rawData);
-
 		return true;
 	}
 
-	writeAvailabilityFreeList(buffer: Uint8Array): void {
+	private writeAvailabilityFreeList(buffer: Uint8Array): void {
 		let cursor = HEADER_SIZE + 1; // Start after header and cell counts
 		const view = new DataView(
 			buffer.buffer,
@@ -233,16 +245,6 @@ export class Page {
 		}
 	}
 
-	private writeHeaderInplace(): void {
-		const view = new DataView(
-			this.rawData.buffer,
-			this.rawData.byteOffset,
-			this.rawData.byteLength
-		);
-
-		view.setUint8(10, this.header.freeSpaceEnd); // 1 byte for freeSpaceEnd
-		view.setUint8(11, this.header.cellCount); // 1 byte for cellCount
-	}
 
 	private writeCellOffsetsInplace(buffer: Uint8Array): void {
 		console.log(this.availablityFreeList.length);
@@ -263,6 +265,7 @@ export class Page {
 		const header = this.header.serialize();
 
 		buffer.set(header, 0);
+
 		this.writeAvailabilityFreeList(buffer);
 		this.writeCellOffsetsInplace(buffer);
 		for (let i = 0; i < this.cellOffset.length; i++) {
@@ -287,14 +290,6 @@ export class Page {
 		return buffer;
 	}
 
-
-    private applyInsert() {
-
-    }
-
-    private applyDelete() {
-
-    }
 }
 
 export const store = writable(new Page());
