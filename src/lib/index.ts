@@ -14,13 +14,15 @@ export class Cell {
 	}
 }
 
+// This is specifically designed for page size of 256 bytes. For esier readibility on screens.
+// But in real world page size is 4KB or 4096 bytes.
+
 /*
     |pageId: 4B
-    |magicString: 4B
-    |freeListHead: 4B
-    |freeSpaceEnd: 2B
-    |cellCount: 2B
-    */
+    |magicString: 6B
+    |freeSpaceEnd: 1B
+    |cellCount: 1B
+*/
 
 export const HEADER_SIZE = 4 + 6 + 1 + 1; // 12 bytes
 const OVERHEAD_SIZE = 2; // 2 bytes for key length and value
@@ -58,7 +60,7 @@ export class PageHeader {
 /*
     | offset: 1B
     | size: 1B
-    */
+*/
 
 type FreeEntry = {
 	offset: number;
@@ -154,7 +156,29 @@ export class Page {
 		this.availabilityFreeList.push({ offset, size: size + OVERHEAD_SIZE });
 	}
 
-	compact(): void {}
+	compact(): number {
+		const approximatedBytesCompacted = this.applyCompaction();
+		this.serialize();
+		return approximatedBytesCompacted;
+	}
+
+	applyCompaction(): number {
+		const newPage: Page = new Page();
+		let approximatedFreedSpace: number = 0;
+		for (const freeListEntry of this.availabilityFreeList) {
+			approximatedFreedSpace += freeListEntry.size;
+		}
+
+		for (const cellData of this.cellsData.values()) {
+			const result = newPage.applyInsert(cellData.key, cellData.value);
+			if (!result) {
+				throw new Error('Compaction failed. Not enough space to insert cell.');
+			}
+		}
+
+		Object.assign(this, newPage);
+		return approximatedFreedSpace;
+	}
 
 	findCellIndexByKey(key: string): number | null {
 		let low = 0;
@@ -247,7 +271,6 @@ export class Page {
 		const cellOffset = this.cellOffset[index];
 		const cellSize = this.cellsData.get(cellOffset)!.length();
 
-		// this.cellsData.delete(cellOffset);
 		this.cellOffset.splice(index, 1);
 		this.freeSlot(cellOffset, cellSize);
 		this.header.cellCount--;

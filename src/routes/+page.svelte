@@ -3,13 +3,6 @@
 	import { store, Cell } from '$lib/index';
 	import PageHeaderView from '$lib/PageHeaderView.svelte';
 	import HexTable from '$lib/HexTable.svelte';
-	// const pageSizs: Array<number> = [256, 512, 1024, 2048, 4096];
-	// let rowSize: number  = $state(16);
-	// let selectedPageSize = $state(1024);
-
-	// let colSize: number = $derived(
-	//      selectedPageSize / rowSize
-	// );
 
 	let keyInput: string = $state('');
 	let valueInput: string = $state('');
@@ -20,23 +13,6 @@
 	let highlightedOffset: number | null = $state(null);
 	const rowRefs: Record<number, HTMLTableRowElement> = {};
 	let highlightTimer: ReturnType<typeof setTimeout> | null = null;
-
-	// function registerRow(node: HTMLTableRowElement, offset: number) {
-	// 	rowRefs[offset] = node;
-
-	// 	return {
-	// 		update(newOffset: number) {
-	// 			if (newOffset !== offset) {
-	// 				delete rowRefs[offset];
-	// 				offset = newOffset;
-	// 				rowRefs[offset] = node;
-	// 			}
-	// 		},
-	// 		destroy() {
-	// 			delete rowRefs[offset];
-	// 		}
-	// 	};
-	// }
 
 	function insert(key: string, value: string) {
 		const normalizedKey = key.trim();
@@ -107,9 +83,6 @@
 			return page;
 		});
 	}
-	// $effect(() => {
-
-	// })
 </script>
 
 <svelte:head>
