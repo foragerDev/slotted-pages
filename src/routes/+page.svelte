@@ -21,64 +21,35 @@
 	const rowRefs: Record<number, HTMLTableRowElement> = {};
 	let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
-	function registerRow(node: HTMLTableRowElement, offset: number) {
-		rowRefs[offset] = node;
+	// function registerRow(node: HTMLTableRowElement, offset: number) {
+	// 	rowRefs[offset] = node;
 
-		return {
-			update(newOffset: number) {
-				if (newOffset !== offset) {
-					delete rowRefs[offset];
-					offset = newOffset;
-					rowRefs[offset] = node;
-				}
-			},
-			destroy() {
-				delete rowRefs[offset];
-			}
-		};
-	}
+	// 	return {
+	// 		update(newOffset: number) {
+	// 			if (newOffset !== offset) {
+	// 				delete rowRefs[offset];
+	// 				offset = newOffset;
+	// 				rowRefs[offset] = node;
+	// 			}
+	// 		},
+	// 		destroy() {
+	// 			delete rowRefs[offset];
+	// 		}
+	// 	};
+	// }
 
-	async function insert(key: string, value: string) {
-		let insertedOffset: number | null = null;
+	function insert(key: string, value: string) {
 		const normalizedKey = key.trim();
 		const normalizedValue = value.trim();
 
 		store.update((page) => {
 			try {
-				const existedBefore = page.findCellIndexByKey(normalizedKey) !== null;
-				const inserted = page.insert(normalizedKey, normalizedValue);
-				if (inserted && !existedBefore) {
-					const insertedIndex = page.findCellIndexByKey(normalizedKey);
-					if (insertedIndex !== null) {
-						insertedOffset = page.cellOffset[insertedIndex];
-					}
-				}
+				page.insert(normalizedKey, normalizedValue);
 			} catch (error) {
 				console.error('Error inserting cell:', error);
 			}
 			return page;
 		});
-
-		if (insertedOffset === null) {
-			return;
-		}
-
-		highlightedOffset = insertedOffset;
-		await tick();
-		rowRefs[insertedOffset]?.scrollIntoView({
-			behavior: 'smooth',
-			block: 'center',
-			inline: 'nearest'
-		});
-
-		if (highlightTimer) {
-			clearTimeout(highlightTimer);
-		}
-		highlightTimer = setTimeout(() => {
-			if (highlightedOffset === insertedOffset) {
-				highlightedOffset = null;
-			}
-		}, 1300);
 	}
 
 	async function findCell(key: string) {
@@ -88,6 +59,9 @@
 			const cellIndex = page.findCellIndexByKey(normalizedKey);
 			if (cellIndex !== null) {
 				foundOffset = page.cellOffset[cellIndex];
+			}
+			else {
+				foundOffset = null;
 			}
 			return page;
 		});
@@ -116,8 +90,9 @@
 	}
 
 	function deleteCell(key: string) {
+		const normalizedKey = key.trim();
 		store.update((page) => {
-			page.delete(key);
+			page.delete(normalizedKey);
 			return page;
 		});
 	}
@@ -141,12 +116,12 @@
 	<title>Slotted Pages</title>
 </svelte:head>
 <div
-	class="mx-auto min-h-dvh w-full max-w-none px-1 py-1 md:px-3 md:py-4 lg:h-dvh lg:overflow-hidden"
+	class="mx-auto min-h-dvh w-full max-w-none px-1 py-1 md:px-3 md:py-4"
 >
 	<div
-		class="grid grid-cols-1 gap-3 lg:h-full lg:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.8fr)] lg:gap-4"
+		class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.8fr)] lg:gap-4"
 	>
-		<div class="panel flex min-h-112 flex-col overflow-hidden lg:min-h-0 lg:h-full">
+		<div class="panel flex flex-col">
 			<div class="flex flex-row items-center justify-between">
 				<div class="mb-2 text-center text-sm font-bold md:text-left">Hex View</div>
 				<button
@@ -156,16 +131,15 @@
 							page.reset();
 							return page;
 						});
-					}}
-					>Reset</button
+					}}>Reset</button
 				>
 			</div>
-			<div class="min-h-0 flex-1 rounded-lg border border-gray-300">
+			<div class="rounded-lg border border-gray-300">
 				<HexTable page={$store} />
 			</div>
 		</div>
 
-		<div class="flex flex-col gap-3 lg:h-full lg:min-h-0">
+		<div class="flex flex-col gap-3 lg:min-h-0">
 			<div class="panel p-3">
 				<p class="mb-2 text-center text-sm font-bold md:text-left">Page Header</p>
 				<PageHeaderView header={$store.header} />
@@ -189,7 +163,7 @@
 						/>
 						<button
 							type="submit"
-							class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:bg-emerald-800 hover:shadow"
+							class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-emerald-800 hover:shadow"
 						>
 							Find
 						</button>
@@ -208,7 +182,7 @@
 							<div>{value}</div>
 							<div>
 								<button
-									class="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:bg-red-700 hover:shadow"
+									class="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-red-700 hover:shadow"
 									onclick={() => {
 										deleteCell(key);
 										foundResult = null;
@@ -275,10 +249,6 @@
 </div>
 
 <style>
-	.new-cell-row {
-		animation: cell-pop 1.15s ease;
-	}
-
 	@keyframes cell-pop {
 		0% {
 			box-shadow: inset 0 0 0 9999px rgba(16, 185, 129, 0.06);
