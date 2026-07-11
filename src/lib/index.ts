@@ -29,6 +29,8 @@ const OVERHEAD_SIZE = 2; // 2 bytes for key length and value
 const MIN_ALLOWED_FREE_SPACE = 4; // Minimum allowed free space to avoid internal fragmentation
 const PAGE_SIZE = 256; // Assuming a default page size of 256 bytes
 
+let pageId = 0;
+
 export class PageHeader {
 	pageId: number;
 	magicString: 'MAGICS';
@@ -162,21 +164,24 @@ export class Page {
 		return approximatedBytesCompacted;
 	}
 
-	applyCompaction(): number {
+	private applyCompaction(): number {
 		const newPage: Page = new Page();
-		let approximatedFreedSpace: number = 0;
-		for (const freeListEntry of this.availabilityFreeList) {
-			approximatedFreedSpace += freeListEntry.size;
-		}
-
-		for (const cellData of this.cellsData.values()) {
-			const result = newPage.applyInsert(cellData.key, cellData.value);
+		for (const offset of this.cellOffset) {
+			const item = this.cellsData.get(offset)!;
+			const result = newPage.applyInsert(item.key, item.value, true);
 			if (!result) {
 				throw new Error('Compaction failed. Not enough space to insert cell.');
 			}
 		}
+		newPage.sortCellsByKey();
+		newPage.header.pageId = this.header.pageId; // Preserve the original pageId
+		const approximatedFreedSpace =
+			newPage.calculateAvailableFreeSpace() - this.calculateAvailableFreeSpace();
 
-		Object.assign(this, newPage);
+		this.header = newPage.header;
+		this.cellOffset = newPage.cellOffset;
+		this.cellsData = newPage.cellsData;
+		this.availabilityFreeList = [];
 		return approximatedFreedSpace;
 	}
 
@@ -233,7 +238,7 @@ export class Page {
 		return result;
 	}
 
-	private applyInsert(key: string, value: string): boolean {
+	private applyInsert(key: string, value: string, isCompact: boolean = false): boolean {
 		const existingIndex = this.findCellIndexByKey(key);
 		if (existingIndex !== null) {
 			return this.update(key, value, existingIndex);
@@ -252,7 +257,9 @@ export class Page {
 		this.cellsData.set(slotOffset, new Cell(key, value));
 		this.cellOffset.push(slotOffset);
 		this.header.cellCount++;
-		this.sortCellsByKey();
+		if (!isCompact) {
+			this.sortCellsByKey();
+		}
 		return true;
 	}
 
@@ -335,7 +342,7 @@ export class Page {
 	}
 
 	reset(): void {
-		this.header = new PageHeader(0);
+		this.header = new PageHeader(++pageId);
 		this.cellOffset = [];
 		this.cellsData.clear();
 		this.availabilityFreeList = [];

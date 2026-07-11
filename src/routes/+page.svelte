@@ -9,6 +9,8 @@
 	let searchInput: string = $state('');
 	let foundResult: Cell | null = $state(null);
 	let foundOffset: number | null = $state(null);
+	let notExist: boolean | null = $state(null);
+	let freedBytes: number = $state(0);
 
 	let highlightedOffset: number | null = $state(null);
 	const rowRefs: Record<number, HTMLTableRowElement> = {};
@@ -35,8 +37,7 @@
 			const cellIndex = page.findCellIndexByKey(normalizedKey);
 			if (cellIndex !== null) {
 				foundOffset = page.cellOffset[cellIndex];
-			}
-			else {
+			} else {
 				foundOffset = null;
 			}
 			return page;
@@ -61,6 +62,7 @@
 				}
 			}, 1300);
 		} else {
+			notExist = true;
 			console.warn(`Cell with key "${normalizedKey}" not found.`);
 		}
 	}
@@ -76,24 +78,41 @@
 	function compactPage() {
 		store.update((page) => {
 			try {
-				page.compact();
+				freedBytes = page.compact();
 			} catch (error) {
 				console.error('Error compacting page:', error);
 			}
 			return page;
 		});
 	}
+
+	$effect(() => {
+		if (freedBytes <= 0) return;
+
+		const timeoutId = setTimeout(() => {
+			freedBytes = 0;
+		}, 3000);
+
+		return () => clearTimeout(timeoutId);
+	});
+
+	$effect(() => {
+		if (notExist) {
+			const timeoutId = setTimeout(() => {
+				notExist = null;
+			}, 3000);
+
+			return () => clearTimeout(timeoutId);
+		}
+	});
+
 </script>
 
 <svelte:head>
 	<title>Slotted Pages</title>
 </svelte:head>
-<div
-	class="mx-auto min-h-dvh w-full max-w-none px-1 py-1 md:px-3 md:py-4"
->
-	<div
-		class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.8fr)] lg:gap-4"
-	>
+<div class="mx-auto min-h-dvh w-full max-w-none px-1 py-1 md:px-3 md:py-4">
+	<div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.8fr)] lg:gap-4">
 		<div class="panel flex flex-col">
 			<div class="flex flex-row items-center justify-between">
 				<div class="mb-2 text-center text-sm font-bold md:text-left">Hex View</div>
@@ -104,7 +123,7 @@
 							page.reset();
 							return page;
 						});
-					}}>Reset</button
+					}}>New Page</button
 				>
 			</div>
 			<div class="rounded-lg border border-gray-300">
@@ -124,6 +143,7 @@
 					onsubmit={(event) => {
 						event.preventDefault();
 						findCell(searchInput);
+						searchInput = '';
 					}}
 				>
 					<div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
@@ -140,6 +160,12 @@
 						>
 							Find
 						</button>
+
+						{#if notExist}
+							<p class="col-span-full mt-2 rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700">
+								Cell not found.
+							</p>
+						{/if}
 					</div>
 
 					{#if foundResult !== null}
@@ -185,6 +211,11 @@
 						Compact
 					</button>
 				</div>
+				{#if freedBytes > 0}
+					<p class="mb-2 rounded-md bg-emerald-50 px-2 py-1 text-sm font-medium text-emerald-700">
+						Compaction freed {freedBytes} bytes.
+					</p>
+				{/if}
 				<form
 					onsubmit={(event) => {
 						event.preventDefault();
