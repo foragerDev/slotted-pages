@@ -159,6 +159,11 @@ export class Page {
 	}
 
 	compact(): number {
+
+		if(this.availabilityFreeList.length === 0) {
+			return 0;
+		}
+
 		const approximatedBytesCompacted = this.applyCompaction();
 		this.serialize();
 		return approximatedBytesCompacted;
@@ -167,12 +172,15 @@ export class Page {
 	private applyCompaction(): number {
 		const newPage: Page = new Page();
 		for (const offset of this.cellOffset) {
+			// Assumption is that, at this point, we have enough space to insert all
+			// the cells into the new page. And `offset` must exist in cellData.
 			const item = this.cellsData.get(offset)!;
 			const result = newPage.applyInsert(item.key, item.value, true);
 			if (!result) {
 				throw new Error('Compaction failed. Not enough space to insert cell.');
 			}
 		}
+		// Sort only once
 		newPage.sortCellsByKey();
 		newPage.header.pageId = this.header.pageId; // Preserve the original pageId
 		const approximatedFreedSpace =
@@ -238,6 +246,9 @@ export class Page {
 		return result;
 	}
 
+	// key: Lookup key identifier
+	// value: Value to be stored
+	// isCompact: For compaction process. If true, the cells will not be sorted after insertion.
 	private applyInsert(key: string, value: string, isCompact: boolean = false): boolean {
 		const existingIndex = this.findCellIndexByKey(key);
 		if (existingIndex !== null) {

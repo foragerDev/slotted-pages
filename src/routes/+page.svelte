@@ -3,6 +3,7 @@
 	import { store, Cell } from '$lib/index';
 	import PageHeaderView from '$lib/PageHeaderView.svelte';
 	import HexTable from '$lib/HexTable.svelte';
+	import { fade } from 'svelte/transition';
 
 	let keyInput: string = $state('');
 	let valueInput: string = $state('');
@@ -105,7 +106,6 @@
 			return () => clearTimeout(timeoutId);
 		}
 	});
-
 </script>
 
 <svelte:head>
@@ -162,7 +162,10 @@
 						</button>
 
 						{#if notExist}
-							<p class="col-span-full mt-2 rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700">
+							<p
+								class="col-span-full mt-2 rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700"
+								transition:fade
+							>
 								Cell not found.
 							</p>
 						{/if}
@@ -197,6 +200,32 @@
 							Search by exact key to jump to the row in Hex View.
 						</p>
 					{/if}
+
+					<div
+						class="w-full h-6.5 bg-emerald-100 rounded-2xl my-1 overflow-hidden hover:cursor-pointer hover:bg-emerald-200 transition" onclick={() => {console.log("expanded")}}
+						aria-label="Show All Items"
+						aria-describedby="showAllItemsDescription"
+						role="button"
+					>
+						<div class="flex flex-row content-end justify-end items-center h-full py-0.5">
+							<p class="ml-2 text-gray-500 text-sm align-middle">Show All Items</p>
+							<div class="ml-auto h-6 w-6 rounded-full bg-emerald-400 transition hover:scale-110">
+								<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="#000000"
+									><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g
+										id="SVGRepo_tracerCarrier"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									></g><g id="SVGRepo_iconCarrier">
+										<g>
+											<path fill="none" d="M0 0h24v24H0z"></path>
+											<path d="M12 15l-4.243-4.243 1.415-1.414L12 12.172l2.828-2.829 1.415 1.414z"
+											></path>
+										</g>
+									</g></svg
+								>
+							</div>
+						</div>
+					</div>
 				</form>
 			</div>
 
@@ -212,7 +241,10 @@
 					</button>
 				</div>
 				{#if freedBytes > 0}
-					<p class="mb-2 rounded-md bg-emerald-50 px-2 py-1 text-sm font-medium text-emerald-700">
+					<p
+						class="mb-2 rounded-md bg-emerald-50 px-2 py-1 text-sm font-medium text-emerald-700"
+						transition:fade
+					>
 						Compaction freed {freedBytes} bytes.
 					</p>
 				{/if}
