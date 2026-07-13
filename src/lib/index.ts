@@ -296,17 +296,11 @@ export class Page {
 	}
 
 	private writeAvailabilityFreeList(buffer: Uint8Array): void {
-		let cursor = HEADER_SIZE; // Start after header and cell counts
-		const view = new DataView(
-			buffer.buffer,
-			buffer.byteOffset + cursor,
-			buffer.byteLength - cursor
-		);
+		let cursor = HEADER_SIZE; // Start right after header
 		for (const freeEntry of this.availabilityFreeList) {
-			view.setUint8(0, freeEntry.offset); // Write offset
-			cursor += 1;
-			view.setUint8(1, freeEntry.size); // Write size
-			cursor += 1;
+			buffer[cursor] = freeEntry.offset;
+			buffer[cursor + 1] = freeEntry.size;
+			cursor += 2;
 		}
 	}
 

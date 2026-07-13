@@ -3,7 +3,7 @@
 	import { store, Cell } from '$lib/index';
 	import PageHeaderView from '$lib/PageHeaderView.svelte';
 	import HexTable from '$lib/HexTable.svelte';
-	import { fade } from 'svelte/transition';
+	import { fade, slide } from 'svelte/transition';
 
 	let keyInput: string = $state('');
 	let valueInput: string = $state('');
@@ -12,6 +12,7 @@
 	let foundOffset: number | null = $state(null);
 	let notExist: boolean | null = $state(null);
 	let freedBytes: number = $state(0);
+	let isShowAllKeysOpen: boolean = $state(false);
 
 	let highlightedOffset: number | null = $state(null);
 	const rowRefs: Record<number, HTMLTableRowElement> = {};
@@ -202,14 +203,26 @@
 					{/if}
 
 					<div
-						class="w-full h-6.5 bg-emerald-100 rounded-2xl my-1 overflow-hidden hover:cursor-pointer hover:bg-emerald-200 transition" onclick={() => {console.log("expanded")}}
+						class="w-full h-6.5 bg-emerald-100 rounded-2xl my-1 overflow-hidden hover:cursor-pointer hover:bg-emerald-200 transition"
+						onclick={() => {
+							isShowAllKeysOpen = !isShowAllKeysOpen;
+						}}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								isShowAllKeysOpen = !isShowAllKeysOpen;
+							}
+						}}
+						tabindex="0"
 						aria-label="Show All Items"
 						aria-describedby="showAllItemsDescription"
 						role="button"
 					>
 						<div class="flex flex-row content-end justify-end items-center h-full py-0.5">
 							<p class="ml-2 text-gray-500 text-sm align-middle">Show All Items</p>
-							<div class="ml-auto h-6 w-6 rounded-full bg-emerald-400 transition hover:scale-110">
+							<div
+								class="ml-auto h-6 w-6 rounded-full bg-emerald-400 transition hover:scale-110"
+								class:rotate-180={isShowAllKeysOpen}
+							>
 								<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="#000000"
 									><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g
 										id="SVGRepo_tracerCarrier"
@@ -226,6 +239,63 @@
 							</div>
 						</div>
 					</div>
+					{#if isShowAllKeysOpen}
+						{@const sortedCellsData = Array.from($store.cellsData.entries()).sort((a, b) =>
+							a[1].key.localeCompare(b[1].key)
+						)}
+						<div
+							id="showAllItemsDescription"
+							class="w-full rounded-lg bg-white p-2 text-sm shadow-lg"
+							transition:slide
+						>
+							{#if sortedCellsData.length === 0}
+								<p class="text-gray-500">No cells available.</p>
+							{:else}
+								<ul class="max-h-40 overflow-y-auto">
+									{#each sortedCellsData as [offset, value] (offset)}
+										{@const isDeleted =
+											$store.cellOffset.find((cellOffset) => cellOffset === offset) === undefined}
+										<div class="grid grid-cols-12 mt-0.5" class:line-through={isDeleted}>
+											<span class="col-span-2 font-semibold text-sm">{offset}</span>
+											<span class="col-span-4">{value.key}</span>
+											<span class="col-span-4 text-gray-500">{value.value}</span>
+											<span class="col-span-2 justify-end flex">
+												<button
+													class="rounded-lg bg-red-600 px-1 py-1 font-xs font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-red-700 hover:shadow"
+													onclick={() => {
+														deleteCell(value.key);
+													}}
+													title="Delete Cell"
+													disabled={isDeleted}
+												>
+													<svg
+														fill="#ffffffff"
+														height="9px"
+														width="9px"
+														version="1.1"
+														id="Capa_1"
+														xmlns="http://www.w3.org/2000/svg"
+														xmlns:xlink="http://www.w3.org/1999/xlink"
+														viewBox="0 0 490 490"
+														xml:space="preserve"
+														><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g
+															id="SVGRepo_tracerCarrier"
+															stroke-linecap="round"
+															stroke-linejoin="round"
+														></g><g id="SVGRepo_iconCarrier">
+															<polygon
+																points="456.851,0 245,212.564 33.149,0 0.708,32.337 212.669,245.004 0.708,457.678 33.149,490 245,277.443 456.851,490 489.292,457.678 277.331,245.004 489.292,32.337 "
+															></polygon>
+														</g></svg
+													>
+												</button>
+											</span>
+										</div>
+									{/each}
+								</ul>
+							{/if}
+						</div>
+					{/if}
 				</form>
 			</div>
 
