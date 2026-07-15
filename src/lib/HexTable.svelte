@@ -27,7 +27,7 @@
 		if (index < cellOffsetEnd) return 'CELL_OFFSETS';
 		for (const offset of page.cellOffset) {
 			const cell = page.cellsData.get(offset)!;
-			const size = 2 + cell.key.length + cell.value.length;
+			const size = 2 + cell.length();
 			if (index >= offset && index < offset + size) return 'CELL_DATA';
 		}
 		for (const entry of page.availabilityFreeList) {
@@ -61,7 +61,7 @@
 			const offset = page.cellOffset[cellIndex];
 			const cell = page.cellsData.get(offset);
 			if (cell) {
-				const size = 2 + cell.key.length + cell.value.length;
+				const size = 2 + cell.length();
 				return { start: offset, end: offset + size };
 			}
 		}

@@ -1,5 +1,11 @@
 import { writable } from 'svelte/store';
 
+const textEncoder = new TextEncoder();
+
+function byteLength(value: string): number {
+	return textEncoder.encode(value).length;
+}
+
 export class Cell {
 	key: string;
 	value: string;
@@ -10,7 +16,7 @@ export class Cell {
 	}
 
 	length(): number {
-		return this.key.length + this.value.length;
+		return byteLength(this.key) + byteLength(this.value);
 	}
 }
 
@@ -200,9 +206,10 @@ export class Page {
 		while (low <= high) {
 			const mid = Math.floor((low + high) / 2);
 			const midKey = this.cellsData.get(this.cellOffset[mid])!.key;
-			if (midKey === key) {
+			const comparison = midKey.localeCompare(key);
+			if (comparison === 0) {
 				return mid;
-			} else if (midKey < key) {
+			} else if (comparison < 0) {
 				low = mid + 1;
 			} else {
 				high = mid - 1;
@@ -213,7 +220,7 @@ export class Page {
 
 	private update(key: string, value: string, cellIndex: number) {
 		// len of key + len of value
-		const requiredSize = key.length + value.length;
+		const requiredSize = byteLength(key) + byteLength(value);
 
 		// Assumption is, if there is existing key it must exist in the page
 		const cellOffset = this.cellOffset[cellIndex];
@@ -237,7 +244,7 @@ export class Page {
 			this.cellOffset.push(newSlot);
 			this.sortCellsByKey();
 		}
-		return false;
+		return true;
 	}
 
 	insert(key: string, value: string): boolean {
@@ -255,7 +262,7 @@ export class Page {
 			return this.update(key, value, existingIndex);
 		}
 
-		const newCellSize = key.length + value.length + OVERHEAD_SIZE;
+		const newCellSize = byteLength(key) + byteLength(value) + OVERHEAD_SIZE;
 
 		const slotOffset = this.allocateSlot(newCellSize);
 
@@ -330,15 +337,21 @@ export class Page {
 			const cell = this.cellsData.get(offset)!;
 			// Serialize the cell data (keylen + key + valuelen + value) into the buffer at the specified offset
 
-			const keyLen = cell.key.length;
-			const valueLen = cell.value.length;
+			const keyBytes = textEncoder.encode(cell.key);
+			const valueBytes = textEncoder.encode(cell.value);
+			const keyLen = keyBytes.length;
+			const valueLen = valueBytes.length;
+
+			if (keyLen > 255 || valueLen > 255) {
+				throw new Error('Cell key or value is too large to serialize.');
+			}
 
 			const cellData = new Uint8Array(1 + keyLen + 1 + valueLen);
 
 			cellData[0] = keyLen;
-			cellData.set(new TextEncoder().encode(cell.key), 1);
+			cellData.set(keyBytes, 1);
 			cellData[1 + keyLen] = valueLen;
-			cellData.set(new TextEncoder().encode(cell.value), 1 + keyLen + 1);
+			cellData.set(valueBytes, 1 + keyLen + 1);
 			buffer.set(cellData, offset);
 		}
 
