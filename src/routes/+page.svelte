@@ -48,6 +48,7 @@
 		if (foundOffset !== null) {
 			foundResult = $store.cellsData.get(foundOffset) ?? null;
 			highlightedOffset = foundOffset;
+			notExist = false;
 			await tick();
 			rowRefs[foundOffset]?.scrollIntoView({
 				behavior: 'smooth',
@@ -65,6 +66,7 @@
 			}, 1300);
 		} else {
 			notExist = true;
+			foundResult = null;
 			console.warn(`Cell with key "${normalizedKey}" not found.`);
 		}
 	}
@@ -251,17 +253,17 @@
 							{#if sortedCellsData.length === 0}
 								<p class="text-gray-500">No cells available.</p>
 							{:else}
-								<ul class="max-h-40 overflow-y-auto">
+								<div class="max-h-40 overflow-y-auto">
 									{#each sortedCellsData as [offset, value] (offset)}
-										{@const isDeleted =
-											$store.cellOffset.find((cellOffset) => cellOffset === offset) === undefined}
+										{@const offsets = new Set($store.cellOffset)}
+										{@const isDeleted = offsets.has(offset)}
 										<div class="grid grid-cols-12 mt-0.5" class:line-through={isDeleted}>
 											<span class="col-span-2 font-semibold text-sm">{offset}</span>
 											<span class="col-span-4">{value.key}</span>
 											<span class="col-span-4 text-gray-500">{value.value}</span>
 											<span class="col-span-2 justify-end flex">
 												<button
-													class="rounded-lg bg-red-600 px-1 py-1 font-xs font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-red-700 hover:shadow"
+													class="rounded-lg bg-red-600 px-1 py-1 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-red-700 hover:shadow"
 													onclick={() => {
 														deleteCell(value.key);
 													}}
@@ -292,7 +294,7 @@
 											</span>
 										</div>
 									{/each}
-								</ul>
+								</div>
 							{/if}
 						</div>
 					{/if}
@@ -336,6 +338,7 @@
 							bind:value={keyInput}
 							placeholder="Enter key"
 							class="w-full border border-gray-300"
+							id="keyInput"
 						/>
 					</div>
 					<div class="space-y-1">
@@ -345,6 +348,7 @@
 							bind:value={valueInput}
 							placeholder="Enter value"
 							class="w-full border border-gray-300"
+							id="valueInput"
 						/>
 					</div>
 					<button type="submit" class="mt-1 w-full text-sm">Insert Cell</button>
