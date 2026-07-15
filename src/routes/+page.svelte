@@ -256,12 +256,12 @@
 								<div class="max-h-40 overflow-y-auto">
 									{#each sortedCellsData as [offset, value] (offset)}
 										{@const offsets = new Set($store.cellOffset)}
-										{@const isDeleted = offsets.has(offset)}
+										{@const isDeleted = !offsets.has(offset)}
 										<div class="grid grid-cols-12 mt-0.5" class:line-through={isDeleted}>
 											<span class="col-span-2 font-semibold text-sm">{offset}</span>
 											<span class="col-span-4">{value.key}</span>
 											<span class="col-span-4 text-gray-500">{value.value}</span>
-											<span class="col-span-2 justify-end flex">
+											<span class="col-span-2 justify-end flex h-5">
 												<button
 													class="rounded-lg bg-red-600 px-1 py-1 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-px hover:bg-red-700 hover:shadow"
 													onclick={() => {
@@ -337,7 +337,7 @@
 							type="text"
 							bind:value={keyInput}
 							placeholder="Enter key"
-							class="w-full border border-gray-300"
+							class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 transition placeholder:text-gray-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
 							id="keyInput"
 						/>
 					</div>
@@ -347,7 +347,7 @@
 							type="text"
 							bind:value={valueInput}
 							placeholder="Enter value"
-							class="w-full border border-gray-300"
+							class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 transition placeholder:text-gray-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
 							id="valueInput"
 						/>
 					</div>
